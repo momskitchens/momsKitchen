@@ -13,60 +13,46 @@ export class AuthService {
         this.account = new Account(this.client);
     }
 
-    async createAccount({ name, number, email, role }) {
+    async createAccount({ name, number, password, email }) {
+        const formattedNumber = number.startsWith('+91') ?  number : `+91${number}`;
 
-                // Ensure phone number starts with '+' and does not exceed fifteen digits
-                const formattedNumber = number.startsWith('+91') ? number : `+91${number}`;
-        
-                // Check if the phone number length is valid
-                if (formattedNumber.length > 16) { // + and 15 digits
-                    throw new Error("Phone number must start with a '+' and can have a maximum of fifteen digits.");
-                }
-                number = formattedNumber;
-        
+        // Check if the phone number length is valid
+        if (formattedNumber.length > 13) { // + and 10 digits
+            throw new Error("Phone number must start with a '+' and can have a maximum of TEN digits.");
+        }
+
         try {
-            // Check if the user already exists before creating a new account
-            const existingUser = await this.account.createPhoneToken(ID.unique(), number);
-
-            if (existingUser) {
-                throw new Error("User already exists");
-            }
-
             // Create a new user account without a password
-            const userAccount = await this.account.create(ID.unique(), email, '', name);
-
-            // Store role information in user preferences
-            await this.account.updatePrefs(userAccount.$id, { role, number });
-
-            return true;
+            const userAccount = await this.account.create(ID.unique(), email, password, name);
+            // Store phone number and role in user preferences
+            await this.account.createEmailPasswordSession(email, password);
+            await this.account.updatePhone(formattedNumber, password);
+            await this.account.deleteSessions();
+            console.log(userAccount);
+            // await this.account.updatePrefs(userAccount.$id, { number: formattedNumber, role });
+            return userAccount;
         } catch (error) {
             console.error("Error during account creation:", error.message);
             throw error;
         }
     }
-
-    async login({ number }) {
-        const formattedNumber = number.startsWith('+91') ? number : `+91${number}`;
+    async login({email}) {
+        // const formattedNumber = number.startsWith('+91') ? number : `+91${number}`;
         
-        // Check if the phone number length is valid
-        if (formattedNumber.length > 16) { // + and 15 digits
-            throw new Error("Phone number must start with a '+' and can have a maximum of fifteen digits.");
-        }
-  
-         number = formattedNumber;
+        // // Check if the phone number length is valid
+        // if (formattedNumber.length > 13) { // + and 10 digits
+        //     throw new Error("Phone number must start with a '+' and can have a maximum of TEN digits.");
+        // }
+        // number = formattedNumber;
+
         try {
-            if (!number) {
-                throw new Error("Phone number is required.");
+            if (!email) {
+                throw new Error("Email is required.");
             }
 
-            // Create a phone token using the Appwrite SDK
-            const token = await this.account.createPhoneToken(ID.unique(), number);
-
-            // Extract userId from the token response
-            console.log(token)
-            const userId = token.userId;
-
-            return { userId };
+            // Generate phone token for login
+            const token = await this.account.createEmailToken(ID.unique(),email);
+            return token;
         } catch (error) {
             console.error("Error during login:", error.message);
             throw error;
@@ -90,7 +76,13 @@ export class AuthService {
     async otpLoginSession({ userId, secret }) {
         try {
             // Create a session using the Appwrite SDK
-            return await this.account.createSession(userId, secret);
+           const user =  await this.account.createSession(userId, secret);
+           if(user) {
+            return true;
+           }
+           else {
+            throw error;
+           }
         } catch (error) {
             console.error("Error during session creation:", error.message);
             throw error;
